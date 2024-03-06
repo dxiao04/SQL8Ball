@@ -16,6 +16,8 @@ VEL_EPSILON = phylib.PHYLIB_VEL_EPSILON;
 DRAG = phylib.PHYLIB_DRAG;
 MAX_TIME = phylib.PHYLIB_MAX_TIME;
 MAX_OBJECTS = phylib.PHYLIB_MAX_OBJECTS;
+
+FRAME_RATE = 0.01;
 # add more here
 
 HEADER = """<?xml version="1.0" encoding="UTF-8" standalone="no"?>
@@ -320,23 +322,87 @@ class Table( phylib.phylib_table ):
                 result += obj.svg();
         result += FOOTER;
         return result;
+    def roll( self, t ):
+        new = Table();
+        for ball in self:
+            if isinstance( ball, RollingBall ):
+                # create4 a new ball with the same number as the old ball
+                new_ball = RollingBall( ball.obj.rolling_ball.number,
+                                                    Coordinate(0,0),
+                                                    Coordinate(0,0),
+                                                    Coordinate(0,0) );
+                # compute where it rolls to
+                phylib.phylib_roll( new_ball, ball, t );
+                # add ball to table
+                new += new_ball;
+            if isinstance( ball, StillBall ):
+                # create a new ball with the same number and pos as the old ball
+                new_ball = StillBall( ball.obj.still_ball.number,
+                                                Coordinate( ball.obj.still_ball.pos.x,
+                                                                    ball.obj.still_ball.pos.y ) );
+                # add ball to table
+                new += new_ball;
+        # return table
+        return new;
 
 """=========================================================================================
     ========================================================================================="""
 # PART 3
 
-conn = sqlite3.connect("billiard.db");
-cur = conn.cursor();
-cur.execute( """CREATE TABLE Ball 
-                 ( BALLID    INTEGER    NOT NULL AUTOINCREMENT,
-                   BALLNO   INTEGER    NOT NULL,
-                   XPOS       FLOAT         NOT NULL,
-                   YPOS       FLOAT         NOT NULL,
-                   XVEL       FLOAT,
-                   YVEL       FLOAT,
-                   PRIMARY KEY (BALLID) );""" );
+class Database():
+    conn = None;
+    def __init__(self, reset=False):
+        if (reset == True):
+            if os.path.exists( 'phylib.db' ):
+                os.remove( 'phylib.db' );
+        self.conn = sqlite3.connect("phylib.db");
+    
+    def createDB(self):
+        cur = self.conn.cursor();
+        cur.execute( """CREATE TABLE IF NOT EXISTS Ball 
+                        ( BALLID    INTEGER    NOT NULL AUTOINCREMENT,
+                        BALLNO   INTEGER    NOT NULL,
+                        XPOS       FLOAT         NOT NULL,
+                        YPOS       FLOAT         NOT NULL,
+                        XVEL       FLOAT,
+                        YVEL       FLOAT,
+                        PRIMARY KEY (BALLID) );""" );
 
-cur.execute( """CREATE TABLE TTable 
-                 ( TABLEID INTEGER    NOT NULL AUTOINCREMENT,
-                   TIME       FLOAT        NOT NULL,
-                   PRIMARY KEY (TABLEID) );""" );
+        cur.execute( """CREATE TABLE IF NOT EXISTS TTable 
+                        ( TABLEID INTEGER    NOT NULL AUTOINCREMENT,
+                        TIME       FLOAT        NOT NULL,
+                        PRIMARY KEY (TABLEID) );""" );
+
+        cur.execute( """CREATE TABLE IF NOT EXISTS BallTable 
+                        ( BALLID INTEGER    NOT NULL AUTOINCREMENT,
+                        TABLEID INTEGER    NOT NULL,
+                        FOREIGN KEY (BALLID) REFERENCES Ball,
+                        FOREIGN KEY (TABLEID) REFERENCES TTable );""" );
+        
+        cur.execute( """CREATE TABLE IF NOT EXISTS Shot 
+                        ( SHOTID INTEGER    NOT NULL AUTOINCREMENT,
+                        PLAYERID INTEGER    NOT NULL,
+                        GAMEID    INTEGER    NOT NULL,
+                        FOREIGN KEY (PLAYERID) REFERENCES Player,
+                        FOREIGN KEY (GAMEID) REFERENCES Game );""" );
+        # assume shots occur in increasing order of SHOTID
+        cur.execute( """CREATE TABLE IF NOT EXISTS TableShot 
+                        ( TABLEID INTEGER    NOT NULL,
+                        SHOTID    INTEGER    NOT NULL,
+                        FOREIGN KEY (TABLEID) REFERENCES TTable,
+                        FOREIGN KEY (SHOTID) REFERENCES Shot );""" );
+        # assume TABLEIDs are in chronological order
+        cur.execute( """CREATE TABLE IF NOT EXISTS Game 
+                        ( GAMEID     INTEGER           NOT NULL AUTOINCREMENT,
+                        GAMENAME VARCHAR(64)    NOT NULL,
+                        PRIMARY KEY (GAMEID) );""" );
+        cur.execute( """CREATE TABLE IF NOT EXISTS Player 
+                        ( PLAYERID     INTEGER           NOT NULL AUTOINCREMENT,
+                        GAMEID          INTEGER           NOT NULL,
+                        PLAYERNAME  VARCHAR(64)    NOT NULL,
+                        PRIMARY KEY (PLAYERID),
+                        FOREIGN KEY (GAMEID) REFERENCES Game );""" );
+        cur.close();
+        self.conn.commit();
+    def readTable (self, tableID):
+        
