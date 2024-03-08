@@ -295,7 +295,7 @@ class Table( phylib.phylib_table ):
         the phylib_print_table function from A1Test1.c.
         """
         result = "";    # create empty string
-        result += "time = %6.1f;\n" % self.time;    # append time
+        result += "time = %6.6f;\n" % self.time;    # append time
         for i,obj in enumerate(self): # loop over all objects and number them
             result += "  [%02d] = %s\n" % (i,obj);  # append object description
         return result;  # return the string
@@ -351,6 +351,7 @@ class Table( phylib.phylib_table ):
 
 class Database():
     conn = None;
+    #cur = None;
     def __init__(self, reset=False):
         if (reset == True):
             if os.path.exists( 'phylib.db' ):
@@ -359,50 +360,120 @@ class Database():
     
     def createDB(self):
         cur = self.conn.cursor();
-        cur.execute( """CREATE TABLE IF NOT EXISTS Ball 
-                        ( BALLID    INTEGER    NOT NULL AUTOINCREMENT,
+        tableList = cur.execute("""SELECT * FROM sqlite_master
+                                                 WHERE (TYPE = 'TABLE');""").fetchall();
+        print("STARTING");
+        print(tableList);
+        if not(any (table[0] == 'Ball' for table in tableList)):
+            cur.execute( """CREATE TABLE Ball 
+                        ( BALLID    INTEGER    NOT NULL,
                         BALLNO   INTEGER    NOT NULL,
                         XPOS       FLOAT         NOT NULL,
                         YPOS       FLOAT         NOT NULL,
                         XVEL       FLOAT,
                         YVEL       FLOAT,
-                        PRIMARY KEY (BALLID) );""" );
-
-        cur.execute( """CREATE TABLE IF NOT EXISTS TTable 
-                        ( TABLEID INTEGER    NOT NULL AUTOINCREMENT,
+                        PRIMARY KEY (BALLID AUTOINCREMENT) );""" );
+            print("ball table created");
+        if not (any (table[0] == 'TTable' for table in tableList)):
+            cur.execute( """CREATE TABLE TTable 
+                        ( TABLEID INTEGER    NOT NULL,
                         TIME       FLOAT        NOT NULL,
-                        PRIMARY KEY (TABLEID) );""" );
-
-        cur.execute( """CREATE TABLE IF NOT EXISTS BallTable 
-                        ( BALLID INTEGER    NOT NULL AUTOINCREMENT,
+                        PRIMARY KEY (TABLEID AUTOINCREMENT) );""" );
+            print("ttable created");
+        if not (any (table[0] == 'BallTable' for table in tableList)):
+            cur.execute( """CREATE TABLE BallTable 
+                        ( BALLID INTEGER    NOT NULL,
                         TABLEID INTEGER    NOT NULL,
                         FOREIGN KEY (BALLID) REFERENCES Ball,
                         FOREIGN KEY (TABLEID) REFERENCES TTable );""" );
-        
-        cur.execute( """CREATE TABLE IF NOT EXISTS Shot 
-                        ( SHOTID INTEGER    NOT NULL AUTOINCREMENT,
+            print("balltable created");
+        if not (any (table[0] == 'Shot' for table in tableList)):
+            cur.execute( """CREATE TABLE Shot 
+                        ( SHOTID INTEGER    NOT NULL,
                         PLAYERID INTEGER    NOT NULL,
                         GAMEID    INTEGER    NOT NULL,
+                        PRIMARY KEY (SHOTID AUTOINCREMENT),
                         FOREIGN KEY (PLAYERID) REFERENCES Player,
                         FOREIGN KEY (GAMEID) REFERENCES Game );""" );
+            print("shot table created");
         # assume shots occur in increasing order of SHOTID
-        cur.execute( """CREATE TABLE IF NOT EXISTS TableShot 
+        if not (any (table[0] == 'TableShot' for table in tableList)):
+            cur.execute( """CREATE TABLE TableShot 
                         ( TABLEID INTEGER    NOT NULL,
                         SHOTID    INTEGER    NOT NULL,
                         FOREIGN KEY (TABLEID) REFERENCES TTable,
                         FOREIGN KEY (SHOTID) REFERENCES Shot );""" );
+            print("table shot table created");
         # assume TABLEIDs are in chronological order
-        cur.execute( """CREATE TABLE IF NOT EXISTS Game 
-                        ( GAMEID     INTEGER           NOT NULL AUTOINCREMENT,
+        if not (any (table[0] == 'Game' for table in tableList)):
+            cur.execute( """CREATE TABLE Game 
+                        ( GAMEID     INTEGER           NOT NULL,
                         GAMENAME VARCHAR(64)    NOT NULL,
-                        PRIMARY KEY (GAMEID) );""" );
-        cur.execute( """CREATE TABLE IF NOT EXISTS Player 
-                        ( PLAYERID     INTEGER           NOT NULL AUTOINCREMENT,
+                        PRIMARY KEY (GAMEID AUTOINCREMENT) );""" );
+            print("game table created");
+        if not (any (table[0] == 'Player' for table in tableList)):
+            cur.execute( """CREATE TABLE Player 
+                        ( PLAYERID     INTEGER           NOT NULL,
                         GAMEID          INTEGER           NOT NULL,
                         PLAYERNAME  VARCHAR(64)    NOT NULL,
-                        PRIMARY KEY (PLAYERID),
+                        PRIMARY KEY (PLAYERID AUTOINCREMENT),
                         FOREIGN KEY (GAMEID) REFERENCES Game );""" );
+            print("player table created");
         cur.close();
         self.conn.commit();
     def readTable (self, tableID):
+        """create Balls whose BALLIDs are in the BallTable table with a TABLEID that
+            is one larger than the method's argument"""
+        retTable = Table();
+        cur = self.conn.cursor();
+        temp = cur.execute("""SELECT * FROM BallTable
+                                                WHERE (BallTable.TABLEID = ?);""", (tableID + 1,));
+        if (temp == None):
+            return None;
+        tempBalls = cur.execute("""SELECT * FROM Ball, BallTable
+                                    WHERE (Ball.BALLID = BallTable.BALLID
+                                    AND BallTable.TABLEID = ?);""", (tableID + 1,));
+        ballsTemp = cur.fetchall();
+        for column in tempBalls.description: 
+            print(column[0]);
+        print ('\n'.join(str(e) for e in ballsTemp));
+        cur.close();
+        self.conn.commit();
+        #FIX AND RETURN
+    def writeTable(self, table):
+        cur = self.conn.cursor();
+        cur.execute("""INSERT INTO TTable (TIME)
+                                VALUES (?);""", (table.time,));
+        cur.execute("""SELECT TABLEID FROM TTable;""");
+        tableID = max(cur.fetchall())[0];
+        print("tableid ", tableID);
+        for object in table:
+            if isinstance( object, StillBall ):
+                cur.execute("""INSERT INTO Ball
+                                        VALUES (?, ?, ?, ?, ?, ?);""", (None, object.obj.still_ball.number,\
+                                        object.obj.still_ball.pos.x, object.obj.still_ball.pos.y, "NULL", "NULL"));
+                ballID = max(cur.execute("""SELECT BALLID FROM Ball;""").fetchall())[0];
+                #print("ballid ", ballID);
+                cur.execute("""INSERT INTO BallTable
+                                        VALUES (?, ?);""", (ballID, tableID));
+            if isinstance( object, RollingBall ):
+                cur.execute("""INSERT INTO Ball
+                                        VALUES (?, ?, ?, ?, ?, ?);""", (None, object.obj.rolling_ball.number,\
+                                        object.obj.rolling_ball.pos.x, object.obj.rolling_ball.pos.y, \
+                                        object.obj.rolling_ball.vel.x, object.obj.rolling_ball.vel.y));
+                ballID = max(cur.execute("""SELECT BALLID FROM Ball;""").fetchall())[0];
+                #print("ballid ", ballID);
+                cur.execute("""INSERT INTO BallTable
+                                        VALUES (?, ?);""", (ballID, tableID));
+        self.conn.commit();
+        data = cur.execute("""SELECT * FROM BallTable""");
+        dataText = cur.fetchall();
+        for column in data.description: 
+            print(column[0]);
+        print ('\n'.join(str(e) for e in dataText));
+        cur.close();
         
+        return tableID;
+    def close(self):
+        self.conn.commit();
+        self.conn.close();

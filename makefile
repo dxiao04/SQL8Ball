@@ -4,7 +4,7 @@ LIBS=-lm
 
 # export LD_LIBRARY_PATH=`pwd`
 # ssh -L 52151:localhost:52151 dxiao@linux.socs.uoguelph.ca
-all: libphylib.so _phylib.so
+all: clean libphylib.so _phylib.so
 
 libphylib.so: phylib.o
 	$(CC) $(CFLAGS) phylib.o -shared -o libphylib.so $(LIBS)
