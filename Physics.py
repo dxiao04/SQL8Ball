@@ -1,6 +1,7 @@
 import phylib;
 import os;
 import sqlite3;
+import math; 
 
 ################################################################################
 # import constants from phylib to global varaibles
@@ -362,8 +363,8 @@ class Database():
         cur = self.conn.cursor();
         tableList = cur.execute("""SELECT * FROM sqlite_master
                                                  WHERE (TYPE = 'TABLE');""").fetchall();
-        print("STARTING");
-        print(tableList);
+        #print("STARTING");
+        #print(tableList);
         if not(any (table[0] == 'Ball' for table in tableList)):
             cur.execute( """CREATE TABLE Ball 
                         ( BALLID    INTEGER    NOT NULL,
@@ -373,20 +374,20 @@ class Database():
                         XVEL       FLOAT,
                         YVEL       FLOAT,
                         PRIMARY KEY (BALLID AUTOINCREMENT) );""" );
-            print("ball table created");
+            #print("ball table created");
         if not (any (table[0] == 'TTable' for table in tableList)):
             cur.execute( """CREATE TABLE TTable 
                         ( TABLEID INTEGER    NOT NULL,
                         TIME       FLOAT        NOT NULL,
                         PRIMARY KEY (TABLEID AUTOINCREMENT) );""" );
-            print("ttable created");
+            #print("ttable created");
         if not (any (table[0] == 'BallTable' for table in tableList)):
             cur.execute( """CREATE TABLE BallTable 
                         ( BALLID INTEGER    NOT NULL,
                         TABLEID INTEGER    NOT NULL,
                         FOREIGN KEY (BALLID) REFERENCES Ball,
                         FOREIGN KEY (TABLEID) REFERENCES TTable );""" );
-            print("balltable created");
+            #print("balltable created");
         if not (any (table[0] == 'Shot' for table in tableList)):
             cur.execute( """CREATE TABLE Shot 
                         ( SHOTID INTEGER    NOT NULL,
@@ -395,7 +396,7 @@ class Database():
                         PRIMARY KEY (SHOTID AUTOINCREMENT),
                         FOREIGN KEY (PLAYERID) REFERENCES Player,
                         FOREIGN KEY (GAMEID) REFERENCES Game );""" );
-            print("shot table created");
+            #print("shot table created");
         # assume shots occur in increasing order of SHOTID
         if not (any (table[0] == 'TableShot' for table in tableList)):
             cur.execute( """CREATE TABLE TableShot 
@@ -403,14 +404,14 @@ class Database():
                         SHOTID    INTEGER    NOT NULL,
                         FOREIGN KEY (TABLEID) REFERENCES TTable,
                         FOREIGN KEY (SHOTID) REFERENCES Shot );""" );
-            print("table shot table created");
+            #print("table shot table created");
         # assume TABLEIDs are in chronological order
         if not (any (table[0] == 'Game' for table in tableList)):
             cur.execute( """CREATE TABLE Game 
                         ( GAMEID     INTEGER           NOT NULL,
                         GAMENAME VARCHAR(64)    NOT NULL,
                         PRIMARY KEY (GAMEID AUTOINCREMENT) );""" );
-            print("game table created");
+            #print("game table created");
         if not (any (table[0] == 'Player' for table in tableList)):
             cur.execute( """CREATE TABLE Player 
                         ( PLAYERID     INTEGER           NOT NULL,
@@ -418,7 +419,7 @@ class Database():
                         PLAYERNAME  VARCHAR(64)    NOT NULL,
                         PRIMARY KEY (PLAYERID AUTOINCREMENT),
                         FOREIGN KEY (GAMEID) REFERENCES Game );""" );
-            print("player table created");
+            #print("player table created");
         cur.close();
         self.conn.commit();
     def readTable (self, tableID):
@@ -427,26 +428,44 @@ class Database():
         retTable = Table();
         cur = self.conn.cursor();
         temp = cur.execute("""SELECT * FROM BallTable
-                                                WHERE (BallTable.TABLEID = ?);""", (tableID + 1,));
-        if (temp == None):
+                                                WHERE (BallTable.TABLEID = ?);""", (tableID + 1,)).fetchall();
+        if (not temp):
             return None;
-        tempBalls = cur.execute("""SELECT * FROM Ball, BallTable
+        cur.execute("""SELECT * FROM Ball, BallTable
                                     WHERE (Ball.BALLID = BallTable.BALLID
                                     AND BallTable.TABLEID = ?);""", (tableID + 1,));
         ballsTemp = cur.fetchall();
-        for column in tempBalls.description: 
-            print(column[0]);
-        print ('\n'.join(str(e) for e in ballsTemp));
+        #for column in tempBalls.description: 
+        #    print(column[0]);
+        #print ('\n'.join(str(e) for e in ballsTemp));
+        for ball in ballsTemp:
+            if (ball[4] == 'NULL' and ball[5] == 'NULL'):
+                sb = StillBall(ball[1], Coordinate(ball[2], ball[3]));
+                retTable.add_object(sb);
+            else:
+                velX = float(ball[4]);
+                velY = float(ball[5]);
+                ballLen = math.sqrt(velX * velX + velY * velY);
+                accX = 0;
+                accY = 0;
+                if ballLen > VEL_EPSILON:
+                    accX = (velX * (-1)) / ballLen * DRAG;
+                    accY = (velY * (-1)) / ballLen * DRAG;
+                rb = RollingBall(ball[1], Coordinate(ball[2], ball[3]), Coordinate(ball[4], ball[5]),
+                                                    Coordinate(accX, accY));
+                retTable.add_object(rb);
+
         cur.close();
         self.conn.commit();
-        #FIX AND RETURN
+        return retTable;
+
     def writeTable(self, table):
         cur = self.conn.cursor();
         cur.execute("""INSERT INTO TTable (TIME)
                                 VALUES (?);""", (table.time,));
         cur.execute("""SELECT TABLEID FROM TTable;""");
         tableID = max(cur.fetchall())[0];
-        print("tableid ", tableID);
+        #print("tableid ", tableID);
         for object in table:
             if isinstance( object, StillBall ):
                 cur.execute("""INSERT INTO Ball
@@ -466,14 +485,24 @@ class Database():
                 cur.execute("""INSERT INTO BallTable
                                         VALUES (?, ?);""", (ballID, tableID));
         self.conn.commit();
-        data = cur.execute("""SELECT * FROM BallTable""");
+
+        '''data = cur.execute("""SELECT * FROM BallTable""");
         dataText = cur.fetchall();
         for column in data.description: 
             print(column[0]);
-        print ('\n'.join(str(e) for e in dataText));
+        print ('\n'.join(str(e) for e in dataText));'''
+
         cur.close();
-        
         return tableID;
+
     def close(self):
         self.conn.commit();
         self.conn.close();
+
+class Game():
+    def __init__( self, gameID=None, gameName=None, player1Name=None, player2Name=None):
+        if (isinstance(gameID, int)):
+            if not (gameName is None and player1Name is None and player2Name is None):
+                raise TypeError;
+        elif (gameID is None):
+            
