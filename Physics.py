@@ -352,7 +352,6 @@ class Table( phylib.phylib_table ):
 
 class Database():
     conn = None;
-    #cur = None;
     def __init__(self, reset=False):
         if (reset == True):
             if os.path.exists( 'phylib.db' ):
@@ -361,11 +360,13 @@ class Database():
     
     def createDB(self):
         cur = self.conn.cursor();
-        tableList = cur.execute("""SELECT * FROM sqlite_master
-                                                 WHERE (TYPE = 'TABLE');""").fetchall();
+        cur.execute("""SELECT * FROM sqlite_master
+                                WHERE TYPE = 'table';""");
         #print("STARTING");
-        #print(tableList);
-        if not(any (table[0] == 'Ball' for table in tableList)):
+        tableList = cur.fetchall();
+        #print ('\n'.join(str(e) for e in tableList));
+        if not(any (table[1] == 'Ball' for table in tableList)):
+            print("BALL DOESNT EXIST");
             cur.execute( """CREATE TABLE Ball 
                         ( BALLID    INTEGER    NOT NULL,
                         BALLNO   INTEGER    NOT NULL,
@@ -375,20 +376,20 @@ class Database():
                         YVEL       FLOAT,
                         PRIMARY KEY (BALLID AUTOINCREMENT) );""" );
             #print("ball table created");
-        if not (any (table[0] == 'TTable' for table in tableList)):
+        if not (any (table[1] == 'TTable' for table in tableList)):
             cur.execute( """CREATE TABLE TTable 
                         ( TABLEID INTEGER    NOT NULL,
                         TIME       FLOAT        NOT NULL,
                         PRIMARY KEY (TABLEID AUTOINCREMENT) );""" );
             #print("ttable created");
-        if not (any (table[0] == 'BallTable' for table in tableList)):
+        if not (any (table[1] == 'BallTable' for table in tableList)):
             cur.execute( """CREATE TABLE BallTable 
                         ( BALLID INTEGER    NOT NULL,
                         TABLEID INTEGER    NOT NULL,
                         FOREIGN KEY (BALLID) REFERENCES Ball,
                         FOREIGN KEY (TABLEID) REFERENCES TTable );""" );
             #print("balltable created");
-        if not (any (table[0] == 'Shot' for table in tableList)):
+        if not (any (table[1] == 'Shot' for table in tableList)):
             cur.execute( """CREATE TABLE Shot 
                         ( SHOTID INTEGER    NOT NULL,
                         PLAYERID INTEGER    NOT NULL,
@@ -398,7 +399,7 @@ class Database():
                         FOREIGN KEY (GAMEID) REFERENCES Game );""" );
             #print("shot table created");
         # assume shots occur in increasing order of SHOTID
-        if not (any (table[0] == 'TableShot' for table in tableList)):
+        if not (any (table[1] == 'TableShot' for table in tableList)):
             cur.execute( """CREATE TABLE TableShot 
                         ( TABLEID INTEGER    NOT NULL,
                         SHOTID    INTEGER    NOT NULL,
@@ -406,13 +407,13 @@ class Database():
                         FOREIGN KEY (SHOTID) REFERENCES Shot );""" );
             #print("table shot table created");
         # assume TABLEIDs are in chronological order
-        if not (any (table[0] == 'Game' for table in tableList)):
+        if not (any (table[1] == 'Game' for table in tableList)):
             cur.execute( """CREATE TABLE Game 
                         ( GAMEID     INTEGER           NOT NULL,
                         GAMENAME VARCHAR(64)    NOT NULL,
                         PRIMARY KEY (GAMEID AUTOINCREMENT) );""" );
             #print("game table created");
-        if not (any (table[0] == 'Player' for table in tableList)):
+        if not (any (table[1] == 'Player' for table in tableList)):
             cur.execute( """CREATE TABLE Player 
                         ( PLAYERID     INTEGER           NOT NULL,
                         GAMEID          INTEGER           NOT NULL,
@@ -498,11 +499,60 @@ class Database():
     def close(self):
         self.conn.commit();
         self.conn.close();
+    
+    def getGame (self, id):
+        cur = self.conn.cursor();
+        data = cur.execute("""SELECT * FROM Game, Player
+                                WHERE (Player.GAMEID = ?
+                                AND Game.GAMEID = ?);""", (id, id));
+        dataText = cur.fetchall();
+        for column in data.description: 
+            print(column[0]);
+        self.conn.commit();
+        cur.close();
+        return dataText;
+        
+    def setGame (self, gN, p1N, p2N):
+        cur = self.conn.cursor();
+        cur.execute("""INSERT INTO Game
+                                VALUES (?, ?);""", (None, gN));
+        cur.execute("""SELECT GAMEID FROM Game;""");
+        gameID = max(cur.fetchall())[0];
+        print("max gameid is '%d'"%gameID);
+        cur.execute("""INSERT INTO Player
+                                VALUES (?, ?, ?);""", (None, gameID, p1N));
+        cur.execute("""INSERT INTO Player
+                                VALUES (?, ?, ?);""", (None, gameID, p2N));
+                                
+        self.conn.commit();
+        cur.close();
+
 
 class Game():
     def __init__( self, gameID=None, gameName=None, player1Name=None, player2Name=None):
+        db = Database();
+        db.createDB();
         if (isinstance(gameID, int)):
+            print("GAMEID IS INT");
             if not (gameName is None and player1Name is None and player2Name is None):
+                print("GAMEID IS INT, OTHER INPUTS ARENT NONE")
                 raise TypeError;
+            else:
+                tempID = gameID + 1;
+                table = db.getGame(tempID);
+                
+                print(table);
+                gameName = table[0][0];
+                player1Name = table[0][4];
+                player2Name = table[1][4];
+                print("p1 is %s and p2 is %s" % (player1Name, player2Name));
         elif (gameID is None):
-            
+            if not (isinstance(gameName, str) and isinstance(player1Name, str) and isinstance(player2Name, str)):
+                print ("GAMEID IS NONE, NO STRING INPUT")
+                raise TypeError;
+            else:
+                print("setting");
+                db.setGame(gN=gameName, p1N=player1Name, p2N=player2Name);
+        else:
+            print("WRONG INPUT FORMAT");
+            raise TypeError;
