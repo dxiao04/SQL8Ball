@@ -313,6 +313,7 @@ class Table( phylib.phylib_table ):
         if result:
             result.__class__ = Table;
             result.current = -1;
+        print (result);
         return result;
 
     # add svg method here
@@ -345,6 +346,13 @@ class Table( phylib.phylib_table ):
                 new += new_ball;
         # return table
         return new;
+    def cueBall(self, table):
+        cb = None;
+        for ball in table:
+            if isinstance(ball,StillBall):
+                if (ball.obj.still_ball.number == 0):
+                   cb = ball;
+        return cb;
 
 """=========================================================================================
     ========================================================================================="""
@@ -447,8 +455,8 @@ class Database():
                 velX = float(ball[4]);
                 velY = float(ball[5]);
                 ballLen = math.sqrt(velX * velX + velY * velY);
-                accX = 0;
-                accY = 0;
+                accX = 0.0;
+                accY = 0.0;
                 if ballLen > VEL_EPSILON:
                     accX = (velX * (-1)) / ballLen * DRAG;
                     accY = (velY * (-1)) / ballLen * DRAG;
@@ -469,6 +477,7 @@ class Database():
         #print("tableid ", tableID);
         for object in table:
             if isinstance( object, StillBall ):
+                print("writing still ball ", object.obj.still_ball.number);
                 cur.execute("""INSERT INTO Ball
                                         VALUES (?, ?, ?, ?, ?, ?);""", (None, object.obj.still_ball.number,\
                                         object.obj.still_ball.pos.x, object.obj.still_ball.pos.y, "NULL", "NULL"));
@@ -508,6 +517,7 @@ class Database():
         dataText = cur.fetchall();
         for column in data.description: 
             print(column[0]);
+        print ('\n'.join(str(e) for e in dataText));
         self.conn.commit();
         cur.close();
         return dataText;
@@ -526,9 +536,27 @@ class Database():
                                 
         self.conn.commit();
         cur.close();
+    def newShot(self, gameName, playerName):
+        cur = self.conn.cursor();
+        data = cur.execute("""SELECT * FROM Game, Player
+                                            WHERE (Player.PLAYERNAME = ?
+                                            AND Game.GAMENAME = ?);""", (playerName, gameName));
+        dataText = data.fetchall();
+        print("PRINTING ");
+        print ('\n'.join(str(e) for e in dataText));
+        cur.execute("""INSERT INTO Shot
+                                VALUES (?, ?, ?);""", (None, dataText[0][2], dataText[0][3]));
+        cur.execute("""SELECT * FROM Shot
+                                WHERE (Shot.PLAYERID = ?
+                                AND Shot.GAMEID = ?);""", (dataText[0][2], dataText[0][3]));
+        shotID = max(cur.fetchall())[0];
+        self.conn.commit();
+        cur.close();
+        return shotID;
 
 
 class Game():
+    db = None;
     def __init__( self, gameID=None, gameName=None, player1Name=None, player2Name=None):
         db = Database();
         db.createDB();
@@ -542,10 +570,10 @@ class Game():
                 table = db.getGame(tempID);
                 
                 print(table);
-                gameName = table[0][0];
+                gameName = table[0][1];
                 player1Name = table[0][4];
                 player2Name = table[1][4];
-                print("p1 is %s and p2 is %s" % (player1Name, player2Name));
+                print("p1 is %s and p2 is %s in game %s" % (player1Name, player2Name,gameName));
         elif (gameID is None):
             if not (isinstance(gameName, str) and isinstance(player1Name, str) and isinstance(player2Name, str)):
                 print ("GAMEID IS NONE, NO STRING INPUT")
@@ -556,3 +584,54 @@ class Game():
         else:
             print("WRONG INPUT FORMAT");
             raise TypeError;
+        db.close();
+
+    def shoot(self, gameName, playerName, table, xvel, yvel):
+        db = Database();
+        shotID = db.newShot(gameName, playerName);
+        print ("shot id is ", shotID);
+        
+        cb = table.cueBall(table);
+        
+        tempX = cb.obj.still_ball.pos.x;
+        tempY = cb.obj.still_ball.pos.y;
+        cb.type = phylib.PHYLIB_ROLLING_BALL;
+        cb.obj.rolling_ball.pos.x = tempX;
+        cb.obj.rolling_ball.pos.y = tempY;
+
+        cb.obj.rolling_ball.vel.x = xvel;
+        cb.obj.rolling_ball.vel.y = yvel;
+        ballLen = math.sqrt(xvel * xvel + yvel * yvel);
+        accX = 0.0;
+        accY = 0.0;
+        if ballLen > VEL_EPSILON:
+            accX = (xvel * (-1)) / ballLen * DRAG;
+            accY = (yvel * (-1)) / ballLen * DRAG;
+        cb.obj.rolling_ball.acc.x = accX;
+        cb.obj.rolling_ball.acc.y = accY;
+        cb.obj.rolling_ball.number = 0;
+        #print("starting \n", table);
+        for item in table:
+            if isinstance(item, StillBall):
+                print("xpos %f ypos %f" % (item.obj.still_ball.pos.x,\
+                                                           item.obj.still_ball.pos.y));
+        cur = db.conn.cursor();
+        while table:
+            startTime = table.time;
+            print(table);
+            tableSeg = table.segment();
+            if not table:
+                break;
+            endTime = tableSeg.time;
+            seconds = math.floor((endTime - startTime)/FRAME_RATE);
+            for i in range(seconds+1):
+                frame = i * FRAME_RATE;
+                table = table.roll(frame);
+                print(table);
+                table.time = startTime + frame;
+                #print("time is ", tempTable.time);
+                tableID = db.writeTable(table);
+                cur.execute(""" INSERT  INTO TableShot
+                                        VALUES (?, ?)""",(tableID, shotID));
+                db.conn.commit();
+        db.close();
