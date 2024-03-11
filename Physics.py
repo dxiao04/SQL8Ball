@@ -619,19 +619,19 @@ class Game():
         while table:
             startTime = table.time;
             print(table);
-            tableSeg = table.segment();
-            if not table:
+            temp = table.segment();
+            if not temp:
                 break;
-            endTime = tableSeg.time;
+            endTime = temp.time;
             seconds = math.floor((endTime - startTime)/FRAME_RATE);
-            for i in range(seconds+1):
+            for i in range(seconds):
                 frame = i * FRAME_RATE;
-                table = table.roll(frame);
-                print(table);
-                table.time = startTime + frame;
-                #print("time is ", tempTable.time);
-                tableID = db.writeTable(table);
+                tempTable = table.roll(frame);
+                tempTable.time = startTime + frame;
+                print(tempTable);
+                tableID = db.writeTable(tempTable);
                 cur.execute(""" INSERT  INTO TableShot
                                         VALUES (?, ?)""",(tableID, shotID));
                 db.conn.commit();
+            table = table.segment();
         db.close();
