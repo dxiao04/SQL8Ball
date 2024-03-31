@@ -1,0 +1,116 @@
+Looking for files
+   Found phylib.c
+   Found phylib.h
+   Found makefile
+Compiling
+   export LD_LIBRARY_PATH=/home/socs/workdir/Grading/Repos/A3/dxiao; clang -Wall -pedantic -std=c99 -c phylib.c -o phylib.o 1>> compile.out 2>> compile.err
+   export LD_LIBRARY_PATH=/home/socs/workdir/Grading/Repos/A3/dxiao; clang -shared -o libphylib.so phylib.o -lm 1>> compile.out 2>> compile.err
+   export LD_LIBRARY_PATH=/home/socs/workdir/Grading/Repos/A3/dxiao; cp -n /home/socs/workdir/Grading/TestSuites/A2/Support/phylib.i . 1>> compile.out 2>> compile.err
+   export LD_LIBRARY_PATH=/home/socs/workdir/Grading/Repos/A3/dxiao; swig -python phylib.i 1>> compile.out 2>> compile.err
+   export LD_LIBRARY_PATH=/home/socs/workdir/Grading/Repos/A3/dxiao; clang -Wall -pedantic -std=c99 -c phylib_wrap.c -I/usr/include/python3.11 -fPIC -o phylib_wrap.o 1>> compile.out 2>> compile.err
+   export LD_LIBRARY_PATH=/home/socs/workdir/Grading/Repos/A3/dxiao; clang -Wall -pedantic -std=c99 -shared phylib_wrap.o -L. -L /usr/lib/python3.11 -lpython3.11 -lphylib -o _phylib.so 1>> compile.out 2>> compile.err
+Looking for targets
+   Found libphylib.so
+   Found _phylib.so
+   Found phylib.py
+   Compilation succeeded
+
+Beginning testing
+=================
+
+Test case 01 (Database.__init__ 1)
+Running test01.py
+   Pass!
+
+Test case 02 (Database.createDB 1)
+Running test02.py
+   Pass!
+
+Test case 03 (Database.readTable 1)
+Running test03.py
+   Run generated errors:
+   Traceback (most recent call last):
+
+     File "/home/socs/workdir/Grading/Repos/A3/dxiao/test03.py", line 22, in <module>
+
+       table = db.readTable( 0 );
+
+               ^^^^^^^^^^^^^^^^^
+
+     File "/home/socs/workdir/Grading/Repos/A3/dxiao/Physics.py", line 443, in readTable
+
+       velX = float(ball[4]);
+
+              ^^^^^^^^^^^^^^
+
+   TypeError: float() argument must be a string or a real number, not 'NoneType'
+
+   Fail!
+
+Test case 04 (Database.readTable 2)
+Running test04.py
+   Pass!
+
+Test case 05 (Database.writeTable 1)
+Running test05.py
+   Pass!
+
+Test case 06 (Database.writeTable 2)
+Running test06.py
+   Pass!
+
+Test case 07 (Game.__init__ 1)
+Running test07.py
+   Run generated errors:
+   Traceback (most recent call last):
+
+     File "/home/socs/workdir/Grading/Repos/A3/dxiao/test07.py", line 27, in <module>
+
+       if g.gameName!="G1":
+
+          ^^^^^^^^^^
+
+   AttributeError: 'Game' object has no attribute 'gameName'
+
+   Fail!
+
+Test case 08 (Game.__init__ 2)
+Running test08.py
+   Run generated errors:
+   Traceback (most recent call last):
+
+     File "/home/socs/workdir/Grading/Repos/A3/dxiao/test08.py", line 27, in <module>
+
+       if g2.gameName!="G1":
+
+          ^^^^^^^^^^^
+
+   AttributeError: 'Game' object has no attribute 'gameName'
+
+   Fail!
+
+Test case 09 (Game.shoot 1)
+Running test09.py
+   Pass!
+
+Test case 10 (Game.shoot 2)
+Running test10.py
+   Pass!
+
+Test case 11 (Game.shoot 3)
+Running test11.py
+   Pass!
+
+Test case 12 (Game.shoot 4)
+Running test12.py
+   Pass!
+
+Found makefile
+Correct options
+Comments
+Indentation levels are: ['', '    ', '        ', '            ', '                ', '                 ', '                    ', '                        ', '                            ']
+Code is indented
+Assignment submitted by Daniel Xiao <dxiao@uoguelph.ca>
+   at: Mon Mar 11 22:23:09 2024
+   0 hours late
+   0 points penalty

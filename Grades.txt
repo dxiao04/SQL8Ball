@@ -1,0 +1,18 @@
+ 1            Database.__init__ 1  1
+ 2            Database.createDB 1  1
+ 3           Database.readTable 1  0
+ 4           Database.readTable 2  1
+ 5          Database.writeTable 1  1
+ 6          Database.writeTable 2  1
+ 7                Game.__init__ 1  0
+ 8                Game.__init__ 2  0
+ 9                   Game.shoot 1  1
+10                   Game.shoot 2  1
+11                   Game.shoot 3  1
+12                   Game.shoot 4  1
+13                       makefile  1
+14            options in makefile  1
+15                       comments  1
+16                    indentation  1
+====================================
+Total:                         13/16
